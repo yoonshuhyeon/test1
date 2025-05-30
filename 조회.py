@@ -1,5 +1,4 @@
 import os
-os.environ['PYZBAR_LIBRARY_PATH'] = '/opt/homebrew/Cellar/zbar/0.23.93_2/lib/libzbar.0.dylib'
 import cv2
 import sqlite3
 from pyzbar.pyzbar import decode
@@ -7,15 +6,16 @@ import pygame
 import time
 import numpy as np
 
-db_path = "/Users/suhyeon/Documents/code/python/프로젝트2/students.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "students.db")
 
 pygame.mixer.init()
-sound_ok = pygame.mixer.Sound("ok_sound.wav")
-sound_fail = pygame.mixer.Sound("fail_sound.wav")
+sound_ok = pygame.mixer.Sound(os.path.join(BASE_DIR, "ok_sound.wav"))
+sound_fail = pygame.mixer.Sound(os.path.join(BASE_DIR, "fail_sound.wav"))
 
 def init_db():
     try:
-        with sqlite3.connect(db_path) as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS students (
@@ -43,7 +43,7 @@ def init_db():
 def check_student_in_db(qr_data):
     try:
         grade, class_num, student_num = qr_data.split('_')
-        with sqlite3.connect(db_path) as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT name FROM students WHERE grade=? AND class_num=? AND student_num=?", 
@@ -61,7 +61,7 @@ def check_student_in_db(qr_data):
 def log_meal_to_db(grade, class_num, student_num, name):
     try:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        with sqlite3.connect(db_path) as conn:
+        with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO meal_logs (grade, class_num, student_num, name, timestamp)

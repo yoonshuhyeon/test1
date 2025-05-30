@@ -5,8 +5,8 @@ from tkinter import messagebox
 import tkinter.ttk as ttk
 import qrcode
 
+db_path= os.path.join(os.path.dirname(os.path.abspath(__file__)), 'feedback.db')
 
-db_path = "/Users/suhyeon/Documents/code/python/프로젝트2/students.db"
 
 # QR코드 저장 폴더
 qr_folder = "qr_codes"

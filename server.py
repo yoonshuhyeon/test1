@@ -6,23 +6,25 @@ from flask import Flask, request, jsonify, send_from_directory
 from datetime import datetime, timedelta
 from flask_cors import CORS
 
-
 app = Flask(__name__)
-CORS(app)  # 모든 도메인에서 접근 가능하게 설정
+CORS(app)
 
-QR_FOLDER = "/Users/suhyeon/Documents/code/qr_codes"
+# 현재 작업 디렉토리를 기준으로 상대 경로 지정 (Heroku 호환)
+BASE_DIR = os.getcwd()
+
+# QR 코드 저장 폴더 생성
+QR_FOLDER = os.path.join(BASE_DIR, "qr_codes")
 os.makedirs(QR_FOLDER, exist_ok=True)
 
 # 데이터베이스 파일 경로
-DB_PATH = "/Users/suhyeon/Documents/code/python/프로젝트2/feedback.db"
+DB_PATH = os.path.join(BASE_DIR, "feedback.db")
 
-# 외부 급식 API URL과 API 키 (본인 API 키로 교체)
+# NEIS API 관련 정보 (본인 정보로 수정)
 MEAL_API_URL = "https://open.neis.go.kr/hub/mealServiceDietInfo"
 MEAL_API_KEY = "368ccd7447b04140b197c937a072fb76"
 ATPT_OFCDC_SC_CODE = "T10"   # 교육청 코드 (예: 서울특별시)
 SD_SCHUL_CODE = "9290055"    # 학교 코드 (본인 학교 코드로 변경)
 
-# 데이터베이스 초기화
 def init_feedback_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -39,7 +41,6 @@ def init_feedback_db():
     conn.commit()
     conn.close()
 
-# 앱 시작 시 데이터베이스 초기화
 init_feedback_db()
 
 @app.route('/generate_qr', methods=['POST'])
@@ -92,9 +93,9 @@ def get_meal():
             for meal in meal_data:
                 meal_type = meal.get('MMEAL_SC_NM', '')
                 dish_name = meal.get('DDISH_NM', '')
-                if meal_type == '중식':  # 점심
+                if meal_type == '중식':
                     meal_info['lunch'] = dish_name
-                elif meal_type == '석식':  # 석식
+                elif meal_type == '석식':
                     meal_info['dinner'] = dish_name
         else:
             meal_info['error'] = "급식 정보가 없습니다."
@@ -154,7 +155,6 @@ def get_nutrition():
             if dish_name:
                 menu_names.append(dish_name)
 
-                # 알레르기 번호 추출 (괄호 안 숫자, 구분자는 '.' 또는 ',' 지원)
                 start = dish_name.find('(')
                 end = dish_name.find(')')
                 if start != -1 and end != -1 and start < end:
@@ -181,7 +181,6 @@ def get_nutrition():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# 피드백 제출 API (중복 제거, timestamp에 KST 반영)
 @app.route('/submit_feedback', methods=['POST'])
 def submit_feedback():
     try:
@@ -197,7 +196,6 @@ def submit_feedback():
         if not (1 <= int(rating) <= 5):
             return jsonify({"error": "평점은 1~5 사이의 숫자여야 합니다."}), 400
 
-        # 한국 표준시(UTC+9) 기준 현재 시간
         kst_now = datetime.utcnow() + timedelta(hours=9)
         kst_timestamp_str = kst_now.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -215,12 +213,11 @@ def submit_feedback():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# 피드백 간략 조회 API
 @app.route('/get_feedback', methods=['GET'])
 def get_feedback():
     try:
         date = request.args.get('date', datetime.today().strftime("%Y%m%d"))
-        
+
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute("""
@@ -229,9 +226,9 @@ def get_feedback():
             WHERE date = ? 
             GROUP BY meal_type
         """, (date,))
-        
+
         results = cursor.fetchall()
-        
+
         feedback_data = {}
         for row in results:
             meal_type, avg_rating, count = row
@@ -239,23 +236,22 @@ def get_feedback():
                 'average_rating': round(avg_rating, 1),
                 'total_reviews': count
             }
-        
+
         conn.close()
         return jsonify(feedback_data), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# 피드백 상세 조회 API
 @app.route('/get_feedback_details', methods=['GET'])
 def get_feedback_details():
     try:
         date = request.args.get('date', datetime.today().strftime("%Y%m%d"))
         meal_type = request.args.get('meal_type')
-        
+
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        
+
         if meal_type:
             cursor.execute("""
                 SELECT rating, feedback, timestamp 
@@ -270,9 +266,9 @@ def get_feedback_details():
                 WHERE date = ?
                 ORDER BY timestamp DESC
             """, (date,))
-        
+
         results = cursor.fetchall()
-        
+
         feedback_list = []
         for row in results:
             if meal_type:
@@ -290,7 +286,7 @@ def get_feedback_details():
                     'feedback': feedback,
                     'timestamp': timestamp
                 })
-        
+
         conn.close()
         return jsonify({'feedback_list': feedback_list}), 200
 

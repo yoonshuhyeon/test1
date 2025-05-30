@@ -9,8 +9,8 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-# 현재 작업 디렉토리를 기준으로 상대 경로 지정 (Heroku 호환)
-BASE_DIR = os.getcwd()
+# 현재 파일 위치 기준으로 상대 경로 지정 (Heroku 호환)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # QR 코드 저장 폴더 생성
 QR_FOLDER = os.path.join(BASE_DIR, "qr_codes")

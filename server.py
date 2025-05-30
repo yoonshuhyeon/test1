@@ -1,7 +1,8 @@
 import os
 import qrcode
 import requests
-import sqlite3
+import psycopg2
+from urllib.parse import urlparse
 from flask import Flask, request, jsonify, send_from_directory
 from datetime import datetime, timedelta
 from flask_cors import CORS
@@ -9,39 +10,76 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-# 현재 파일 위치 기준으로 상대 경로 지정 (Heroku 호환)
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
-# QR 코드 저장 폴더 생성
-QR_FOLDER = os.path.join(BASE_DIR, "qr_codes")
+# QR 코드 저장 폴더 (Heroku에서는 /tmp 같은 임시 폴더를 써야 하므로 /tmp/qr_codes로 설정)
+if DATABASE_URL:
+    QR_FOLDER = "/tmp/qr_codes"
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    QR_FOLDER = os.path.join(BASE_DIR, "qr_codes")
 os.makedirs(QR_FOLDER, exist_ok=True)
 
-# 데이터베이스 파일 경로
-DB_PATH = os.path.join(BASE_DIR, "feedback.db")
+def get_connection():
+    if DATABASE_URL:
+        result = urlparse(DATABASE_URL)
+        username = result.username
+        password = result.password
+        database = result.path[1:]
+        hostname = result.hostname
+        port = result.port
+        conn = psycopg2.connect(
+            dbname=database,
+            user=username,
+            password=password,
+            host=hostname,
+            port=port
+        )
+    else:
+        import sqlite3
+        db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feedback.db")
+        conn = sqlite3.connect(db_path)
+        # SQLite에서 datetime 자동 변환 활성화
+        conn.execute("PRAGMA foreign_keys = ON")
+    return conn
 
-# NEIS API 관련 정보 (본인 정보로 수정)
+def init_feedback_db():
+    conn = get_connection()
+    cursor = conn.cursor()
+    # PostgreSQL용 테이블 생성 (SQLite는 약간 다름)
+    if DATABASE_URL:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS meal_feedback (
+                id SERIAL PRIMARY KEY,
+                date TEXT NOT NULL,
+                meal_type TEXT NOT NULL,
+                rating INTEGER NOT NULL,
+                feedback TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+    else:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS meal_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                meal_type TEXT NOT NULL,
+                rating INTEGER NOT NULL,
+                feedback TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+init_feedback_db()
+
+# NEIS API 관련 정보 (본인 정보로 수정하세요)
 MEAL_API_URL = "https://open.neis.go.kr/hub/mealServiceDietInfo"
 MEAL_API_KEY = "368ccd7447b04140b197c937a072fb76"
 ATPT_OFCDC_SC_CODE = "T10"   # 교육청 코드 (예: 서울특별시)
 SD_SCHUL_CODE = "9290055"    # 학교 코드 (본인 학교 코드로 변경)
-
-def init_feedback_db():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS meal_feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT NOT NULL,
-            meal_type TEXT NOT NULL,
-            rating INTEGER NOT NULL,
-            feedback TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-init_feedback_db()
 
 @app.route('/generate_qr', methods=['POST'])
 def generate_qr():
@@ -199,13 +237,20 @@ def submit_feedback():
         kst_now = datetime.utcnow() + timedelta(hours=9)
         kst_timestamp_str = kst_now.strftime("%Y-%m-%d %H:%M:%S")
 
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO meal_feedback (date, meal_type, rating, feedback, timestamp)
-            VALUES (?, ?, ?, ?, ?)
-        """, (date, meal_type, int(rating), feedback, kst_timestamp_str))
+        if DATABASE_URL:
+            cursor.execute("""
+                INSERT INTO meal_feedback (date, meal_type, rating, feedback, timestamp)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (date, meal_type, int(rating), feedback, kst_timestamp_str))
+        else:
+            cursor.execute("""
+                INSERT INTO meal_feedback (date, meal_type, rating, feedback, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            """, (date, meal_type, int(rating), feedback, kst_timestamp_str))
         conn.commit()
+        cursor.close()
         conn.close()
 
         return jsonify({"message": "피드백이 성공적으로 제출되었습니다."}), 200
@@ -218,14 +263,22 @@ def get_feedback():
     try:
         date = request.args.get('date', datetime.today().strftime("%Y%m%d"))
 
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT meal_type, AVG(rating) as avg_rating, COUNT(*) as count
-            FROM meal_feedback 
-            WHERE date = ? 
-            GROUP BY meal_type
-        """, (date,))
+        if DATABASE_URL:
+            cursor.execute("""
+                SELECT meal_type, AVG(rating) as avg_rating, COUNT(*) as count
+                FROM meal_feedback 
+                WHERE date = %s 
+                GROUP BY meal_type
+            """, (date,))
+        else:
+            cursor.execute("""
+                SELECT meal_type, AVG(rating) as avg_rating, COUNT(*) as count
+                FROM meal_feedback 
+                WHERE date = ? 
+                GROUP BY meal_type
+            """, (date,))
 
         results = cursor.fetchall()
 
@@ -237,6 +290,7 @@ def get_feedback():
                 'total_reviews': count
             }
 
+        cursor.close()
         conn.close()
         return jsonify(feedback_data), 200
 
@@ -249,44 +303,78 @@ def get_feedback_details():
         date = request.args.get('date', datetime.today().strftime("%Y%m%d"))
         meal_type = request.args.get('meal_type')
 
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_connection()
         cursor = conn.cursor()
 
-        if meal_type:
-            cursor.execute("""
-                SELECT rating, feedback, timestamp 
-                FROM meal_feedback 
-                WHERE date = ? AND meal_type = ?
-                ORDER BY timestamp DESC
-            """, (date, meal_type))
+        if DATABASE_URL:
+            if meal_type:
+                cursor.execute("""
+                    SELECT rating, feedback, timestamp 
+                    FROM meal_feedback 
+                    WHERE date = %s AND meal_type = %s
+                    ORDER BY timestamp DESC
+                """, (date, meal_type))
+            else:
+                cursor.execute("""
+                    SELECT meal_type, rating, feedback, timestamp 
+                    FROM meal_feedback 
+                    WHERE date = %s
+                    ORDER BY timestamp DESC
+                """, (date,))
         else:
-            cursor.execute("""
-                SELECT meal_type, rating, feedback, timestamp 
-                FROM meal_feedback 
-                WHERE date = ?
-                ORDER BY timestamp DESC
-            """, (date,))
+            if meal_type:
+                cursor.execute("""
+                    SELECT rating, feedback, timestamp 
+                    FROM meal_feedback 
+                    WHERE date = ? AND meal_type = ?
+                    ORDER BY timestamp DESC
+                """, (date, meal_type))
+            else:
+                cursor.execute("""
+                    SELECT meal_type, rating, feedback, timestamp 
+                    FROM meal_feedback 
+                    WHERE date = ?
+                    ORDER BY timestamp DESC
+                """, (date,))
 
         results = cursor.fetchall()
 
         feedback_list = []
         for row in results:
-            if meal_type:
-                rating, feedback, timestamp = row
-                feedback_list.append({
-                    'rating': rating,
-                    'feedback': feedback,
-                    'timestamp': timestamp
-                })
+            if DATABASE_URL:
+                if meal_type:
+                    rating, feedback, timestamp = row
+                    feedback_list.append({
+                        'rating': rating,
+                        'feedback': feedback,
+                        'timestamp': timestamp.isoformat() if timestamp else None
+                    })
+                else:
+                    meal_type_val, rating, feedback, timestamp = row
+                    feedback_list.append({
+                        'meal_type': meal_type_val,
+                        'rating': rating,
+                        'feedback': feedback,
+                        'timestamp': timestamp.isoformat() if timestamp else None
+                    })
             else:
-                meal_type_val, rating, feedback, timestamp = row
-                feedback_list.append({
-                    'meal_type': meal_type_val,
-                    'rating': rating,
-                    'feedback': feedback,
-                    'timestamp': timestamp
-                })
+                if meal_type:
+                    rating, feedback, timestamp = row
+                    feedback_list.append({
+                        'rating': rating,
+                        'feedback': feedback,
+                        'timestamp': timestamp
+                    })
+                else:
+                    meal_type_val, rating, feedback, timestamp = row
+                    feedback_list.append({
+                        'meal_type': meal_type_val,
+                        'rating': rating,
+                        'feedback': feedback,
+                        'timestamp': timestamp
+                    })
 
+        cursor.close()
         conn.close()
         return jsonify({'feedback_list': feedback_list}), 200
 

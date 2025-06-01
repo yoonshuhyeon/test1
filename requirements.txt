@@ -114,7 +114,7 @@ stack-data==0.6.3
 tensorboard==2.16.2
 tensorboard-data-server==0.7.2
 tensorflow==2.16.2
-tensorflow-macos==2.16.2
+tensorflow==2.16.2
 termcolor==3.0.1
 terminado==0.18.1
 tinycss2==1.4.0

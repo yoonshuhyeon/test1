@@ -10,7 +10,7 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-DATABASE_URL = os.environ.get('DATABASE_URL')  # Heroku에서 설정한 DATABASE_URL 환경변수
+DATABASE_URL = os.environ.get('https://tixbooyjqnwptjiwiusv.supabase.co')  # Heroku에서 설정한 DATABASE_URL 환경변수
 
 # QR 코드 저장 폴더 (Heroku에서는 /tmp 같은 임시 폴더를 써야 하므로 /tmp/qr_codes로 설정)
 if DATABASE_URL:
@@ -23,13 +23,15 @@ os.makedirs(QR_FOLDER, exist_ok=True)
 # PostgreSQL 연결 함수
 def get_connection():
     if DATABASE_URL:
-        # Heroku PostgreSQL 연결 (DATABASE_URL 환경변수 사용)
+        # Supabase 데이터베이스 URL 파싱 (Heroku에서 환경 변수로 제공)
         result = urlparse(DATABASE_URL)
         username = result.username
         password = result.password
         database = result.path[1:]  # /postgres 형식이므로 첫 '/' 제외
         hostname = result.hostname
         port = result.port
+        
+        # PostgreSQL 연결
         conn = psycopg2.connect(
             dbname=database,
             user=username,
@@ -42,15 +44,16 @@ def get_connection():
         import sqlite3
         db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feedback.db")
         conn = sqlite3.connect(db_path)
-        # SQLite에서 datetime 자동 변환 활성화
         conn.execute("PRAGMA foreign_keys = ON")
+    
     return conn
 
 # 피드백 DB 초기화 함수
 def init_feedback_db():
     conn = get_connection()
     cursor = conn.cursor()
-    # PostgreSQL용 테이블 생성 (SQLite는 약간 다름)
+    
+    # Supabase 데이터베이스를 사용할 경우 PostgreSQL의 테이블 생성
     if DATABASE_URL:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS meal_feedback (
@@ -63,6 +66,7 @@ def init_feedback_db():
             )
         """)
     else:
+        # 로컬 SQLite에서 사용할 테이블 생성
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS meal_feedback (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,6 +77,7 @@ def init_feedback_db():
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
+    
     conn.commit()
     cursor.close()
     conn.close()

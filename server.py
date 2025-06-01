@@ -10,22 +10,24 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-DATABASE_URL = os.environ.get('DATABASE_URL')
+DATABASE_URL = os.environ.get('DATABASE_URL')  # Heroku에서 설정한 DATABASE_URL 환경변수
 
 # QR 코드 저장 폴더 (Heroku에서는 /tmp 같은 임시 폴더를 써야 하므로 /tmp/qr_codes로 설정)
 if DATABASE_URL:
-    QR_FOLDER = "/tmp/qr_codes"
+    QR_FOLDER = "/tmp/qr_codes"  # Heroku 임시 디렉토리
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     QR_FOLDER = os.path.join(BASE_DIR, "qr_codes")
 os.makedirs(QR_FOLDER, exist_ok=True)
 
+# PostgreSQL 연결 함수
 def get_connection():
     if DATABASE_URL:
+        # Heroku PostgreSQL 연결 (DATABASE_URL 환경변수 사용)
         result = urlparse(DATABASE_URL)
         username = result.username
         password = result.password
-        database = result.path[1:]
+        database = result.path[1:]  # /postgres 형식이므로 첫 '/' 제외
         hostname = result.hostname
         port = result.port
         conn = psycopg2.connect(
@@ -36,6 +38,7 @@ def get_connection():
             port=port
         )
     else:
+        # SQLite 연결 (로컬에서 테스트할 경우)
         import sqlite3
         db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "feedback.db")
         conn = sqlite3.connect(db_path)
@@ -43,6 +46,7 @@ def get_connection():
         conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
+# 피드백 DB 초기화 함수
 def init_feedback_db():
     conn = get_connection()
     cursor = conn.cursor()
@@ -75,11 +79,11 @@ def init_feedback_db():
 
 init_feedback_db()
 
-# NEIS API 관련 정보 (본인 정보로 수정하세요)
+# NEIS API 관련 정보
 MEAL_API_URL = "https://open.neis.go.kr/hub/mealServiceDietInfo"
 MEAL_API_KEY = "368ccd7447b04140b197c937a072fb76"
-ATPT_OFCDC_SC_CODE = "T10"   # 교육청 코드 (예: 서울특별시)
-SD_SCHUL_CODE = "9290055"    # 학교 코드 (본인 학교 코드로 변경)
+ATPT_OFCDC_SC_CODE = "T10"   # 교육청 코드
+SD_SCHUL_CODE = "9290055"    # 학교 코드
 
 @app.route('/generate_qr', methods=['POST'])
 def generate_qr():
@@ -239,16 +243,10 @@ def submit_feedback():
 
         conn = get_connection()
         cursor = conn.cursor()
-        if DATABASE_URL:
-            cursor.execute("""
-                INSERT INTO meal_feedback (date, meal_type, rating, feedback, timestamp)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (date, meal_type, int(rating), feedback, kst_timestamp_str))
-        else:
-            cursor.execute("""
-                INSERT INTO meal_feedback (date, meal_type, rating, feedback, timestamp)
-                VALUES (?, ?, ?, ?, ?)
-            """, (date, meal_type, int(rating), feedback, kst_timestamp_str))
+        cursor.execute("""
+            INSERT INTO meal_feedback (date, meal_type, rating, feedback, timestamp)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (date, meal_type, int(rating), feedback, kst_timestamp_str))
         conn.commit()
         cursor.close()
         conn.close()
@@ -265,20 +263,12 @@ def get_feedback():
 
         conn = get_connection()
         cursor = conn.cursor()
-        if DATABASE_URL:
-            cursor.execute("""
-                SELECT meal_type, AVG(rating) as avg_rating, COUNT(*) as count
-                FROM meal_feedback 
-                WHERE date = %s 
-                GROUP BY meal_type
-            """, (date,))
-        else:
-            cursor.execute("""
-                SELECT meal_type, AVG(rating) as avg_rating, COUNT(*) as count
-                FROM meal_feedback 
-                WHERE date = ? 
-                GROUP BY meal_type
-            """, (date,))
+        cursor.execute("""
+            SELECT meal_type, AVG(rating) as avg_rating, COUNT(*) as count
+            FROM meal_feedback 
+            WHERE date = %s 
+            GROUP BY meal_type
+        """, (date,))
 
         results = cursor.fetchall()
 

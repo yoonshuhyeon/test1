@@ -10,7 +10,7 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-DATABASE_URL = os.environ.get('https://tixbooyjqnwptjiwiusv.supabase.co')  # Heroku에서 설정한 DATABASE_URL 환경변수
+DATABASE_URL = os.environ.get('SUPABASE_DATABASE_URL')  # Heroku에서 설정한 DATABASE_URL 환경변수
 
 # QR 코드 저장 폴더 (Heroku에서는 /tmp 같은 임시 폴더를 써야 하므로 /tmp/qr_codes로 설정)
 if DATABASE_URL:

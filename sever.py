@@ -1,6 +1,6 @@
 import os
 import requests
-import psycopg2-binary
+import psycopg2
 from urllib.parse import urlparse
 from flask import Flask, request, jsonify, send_from_directory
 from datetime import datetime, timedelta

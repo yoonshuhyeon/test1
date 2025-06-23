@@ -9,12 +9,12 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-# Heroku에선 환경변수로부터 DB URL을 받음
+
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # QR 코드 저장 경로 설정
 if DATABASE_URL:
-    QR_FOLDER = "/tmp/qr_codes"  # Heroku에선 임시 디렉토리
+    QR_FOLDER = "/tmp/qr_codes"
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     QR_FOLDER = os.path.join(BASE_DIR, "qr_codes")
@@ -227,7 +227,7 @@ def submit_like():
 
         return jsonify({"message": "좋아요 처리 완료"}), 200
     except Exception as e:
-        print("❌ 에러 발생:", str(e))  # ← 이 줄이 꼭 필요함
+        print("❌ 에러 발생:", str(e))
         return jsonify({"error": str(e)}), 500
 
 
@@ -259,8 +259,8 @@ def get_like_count():
 
 @app.route('/')
 def index():
-    return jsonify({"message": "서버 정상 실행 중"})
+    return jsonify({"message": "sever ok"})
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5001))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)

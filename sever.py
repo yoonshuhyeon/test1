@@ -200,7 +200,6 @@ def submit_like():
         if not meal_type:
             return jsonify({"error": "식사 타입이 필요합니다."}), 400
 
-        # 현재 좋아요 수를 가져옵니다.
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -209,7 +208,6 @@ def submit_like():
         )
         row = cursor.fetchone()
 
-        # 만약 해당 날짜와 식사 타입에 대한 레코드가 없다면 추가합니다.
         if row:
             likes = row[0]
             cursor.execute(
@@ -217,9 +215,10 @@ def submit_like():
                 (likes + 1, date, meal_type)
             )
         else:
+            # rating 기본값 3을 명시적으로 넣어줌
             cursor.execute(
-                "INSERT INTO meal_feedback (date, meal_type, likes) VALUES (%s, %s, %s)",
-                (date, meal_type, 1)
+                "INSERT INTO meal_feedback (date, meal_type, rating, likes) VALUES (%s, %s, %s, %s)",
+                (date, meal_type, 3, 1)
             )
 
         conn.commit()
@@ -229,6 +228,7 @@ def submit_like():
         return jsonify({"message": "좋아요 처리 완료"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/get_like_count', methods=['GET'])
 def get_like_count():

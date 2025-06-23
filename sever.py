@@ -227,7 +227,9 @@ def submit_like():
 
         return jsonify({"message": "좋아요 처리 완료"}), 200
     except Exception as e:
+        print("❌ 에러 발생:", str(e))  # ← 이 줄이 꼭 필요함
         return jsonify({"error": str(e)}), 500
+
 
 
 @app.route('/get_like_count', methods=['GET'])

@@ -14,7 +14,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # QR 코드 저장 경로 설정
 if DATABASE_URL:
-    QR_FOLDER = "/tmp/qr_codes"
+    QR_FOLDER = "qr_codes"
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     QR_FOLDER = os.path.join(BASE_DIR, "qr_codes")

@@ -2,23 +2,14 @@ import os
 import requests
 import psycopg2
 from urllib.parse import urlparse
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify
 from datetime import datetime, timedelta
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
 
-
 DATABASE_URL = os.environ.get("DATABASE_URL")
-
-# QR 코드 저장 경로 설정
-if DATABASE_URL:
-    QR_FOLDER = "qr_codes"
-else:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    QR_FOLDER = os.path.join(BASE_DIR, "qr_codes")
-os.makedirs(QR_FOLDER, exist_ok=True)
 
 # DB 연결 함수
 def get_connection():
@@ -72,11 +63,10 @@ def init_feedback_db():
 
 init_feedback_db()
 
-# 급식 API 관련 정보
-MEAL_API_URL = "https://open.neis.go.kr/hub/mealServiceDietInfo"
-MEAL_API_KEY = "368ccd7447b04140b197c937a072fb76"
-ATPT_OFCDC_SC_CODE = "T10"
-SD_SCHUL_CODE = "9290055"
+# ----------- QR코드 깃허브 raw url 반환 --------
+def github_qr_url(filename):
+    # 반드시 실제 github에 QR 파일이 업로드돼 있어야 동작함
+    return f"https://raw.githubusercontent.com/yoonshuhyeon/test1/main/qr_codes/{filename}"
 
 @app.route('/generate_qr', methods=['POST'])
 def generate_qr():
@@ -84,16 +74,16 @@ def generate_qr():
     grade = str(data.get('grade', '')).strip()
     class_num = str(data.get('class_num', '')).strip()
     student_num = str(data.get('student_num', '')).strip()
-    name = str(data.get('name', '')).strip()
     filename = f"{grade}_{class_num}_{student_num}.png"
-    filepath = os.path.join(QR_FOLDER, filename)
-    if not os.path.exists(filepath):
-        return jsonify({"error": "해당 학생의 QR 코드가 존재하지 않습니다."}), 404
-    return jsonify({"qr_code_path": filename})
+    qr_url = github_qr_url(filename)
+    # 실제로 QR이 깃허브에 없으면 404가 뜸(서버는 단순 URL만 내려줌)
+    return jsonify({"qr_code_url": qr_url})
 
-@app.route('/qr_codes/<path:filename>')
-def serve_qr_code(filename):
-    return send_from_directory(QR_FOLDER, filename)
+# ----------- 급식 API -----------
+MEAL_API_URL = "https://open.neis.go.kr/hub/mealServiceDietInfo"
+MEAL_API_KEY = "368ccd7447b04140b197c937a072fb76"
+ATPT_OFCDC_SC_CODE = "T10"
+SD_SCHUL_CODE = "9290055"
 
 @app.route('/meal', methods=['GET'])
 def get_meal():
@@ -149,7 +139,7 @@ def get_nutrition():
             if (v := row.get('ORPLC_INFO')): orplc_info.append(v)
             if (v := row.get('CAL_INFO')): cal_info.append(v)
             if (v := row.get('NTR_INFO')): ntr_info.append(v)
-            if (v := row.get('DDISH_NM')): 
+            if (v := row.get('DDISH_NM')):
                 menu_names.append(v)
                 if '(' in v and ')' in v:
                     codes = v[v.find('(')+1:v.find(')')].replace(',', '.').split('.')
@@ -164,6 +154,7 @@ def get_nutrition():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ----------- 급식 피드백 ----------
 @app.route('/submit_feedback', methods=['POST'])
 def submit_feedback():
     try:
@@ -178,7 +169,7 @@ def submit_feedback():
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO meal_feedback (date, meal_type, rating, feedback, timestamp) VALUES (?, ?, ?, ?, ?)" 
+            "INSERT INTO meal_feedback (date, meal_type, rating, feedback, timestamp) VALUES (?, ?, ?, ?, ?)"
             if not DATABASE_URL else
             "INSERT INTO meal_feedback (date, meal_type, rating, feedback, timestamp) VALUES (%s, %s, %s, %s, %s)",
             (date, meal_type, int(rating), feedback, ts)
@@ -215,7 +206,6 @@ def submit_like():
                 (likes + 1, date, meal_type)
             )
         else:
-            # rating 기본값 3을 명시적으로 넣어줌
             cursor.execute(
                 "INSERT INTO meal_feedback (date, meal_type, rating, likes) VALUES (%s, %s, %s, %s)",
                 (date, meal_type, 3, 1)
@@ -227,10 +217,7 @@ def submit_like():
 
         return jsonify({"message": "좋아요 처리 완료"}), 200
     except Exception as e:
-        print("❌ 에러 발생:", str(e))
         return jsonify({"error": str(e)}), 500
-
-
 
 @app.route('/get_like_count', methods=['GET'])
 def get_like_count():
@@ -259,7 +246,7 @@ def get_like_count():
 
 @app.route('/')
 def index():
-    return jsonify({"message": "sever ok"})
+    return jsonify({"message": "server ok"})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

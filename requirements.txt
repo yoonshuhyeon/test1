@@ -2,6 +2,6 @@ Flask==3.0.3
 Flask-SQLAlchemy==3.1.1
 SQLAlchemy==2.0.31
 Werkzeug==3.0.3
-psycopg-binary==2.9.9
+psycopg-binary==3.2.9
 gunicorn==22.0.0
 flask-cors==4.0.1

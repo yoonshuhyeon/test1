@@ -73,7 +73,7 @@ def login():
     user = User.query.filter_by(email=email).first()
 
     if not user or not check_password_hash(user.password, password):
-        return jsonify({'error': '이메일 또는 비밀번호가 잘못되었습니다.'}), 401
+        return jsonify({'error': '아이디 혹은 비밀번호가 틀렸습니다.'}), 401
 
     return jsonify({'message': '로그인 성공'}), 200
 

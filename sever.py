@@ -283,7 +283,7 @@ def index():
 with app.app_context():
     db.create_all()
     try:
-        with db.engine.connect() as connection:
+        with db.engine.begin() as connection:
             connection.execute(text('ALTER TABLE users ADD COLUMN last_class_update DATETIME;'))
     except Exception as e:
         # Column already exists, which is fine.

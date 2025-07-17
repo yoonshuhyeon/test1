@@ -99,7 +99,7 @@ def signup():
     if not data or not all(k in data for k in ['email', 'password', 'name', 'grade', 'class_number', 'student_number']):
         return jsonify({'error': '모든 필드를 입력해주세요.'}), 400
     if User.query.filter_by(email=data['email']).first():
-        return jsonify({'error': '이미 사용중인 이메일입니다.'}), 409
+        return jsonify({'error': '이미 사용중인 아이디입니다.'}), 409
     hashed_password = generate_password_hash(data['password'])
     new_user = User(email=data['email'], password=hashed_password, name=data['name'], grade=data['grade'], class_number=data['class_number'], student_number=data['student_number'])
     db.session.add(new_user)
@@ -110,7 +110,7 @@ def signup():
 def login():
     data = request.get_json()
     if not data or not data.get('email') or not data.get('password'):
-        return jsonify({'error': '이메일과 비밀번호를 입력해주세요.'}), 400
+        return jsonify({'error': '아이디과 비밀번호를 입력해주세요.'}), 400
     user = User.query.filter_by(email=data['email']).first()
     if not user or not check_password_hash(user.password, data['password']):
         return jsonify({'error': '아이디 혹은 비밀번호가 틀렸습니다.'}), 401

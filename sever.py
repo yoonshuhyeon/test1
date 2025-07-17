@@ -133,11 +133,9 @@ def get_meal():
             rows = service[1].get('row', [])
             for meal in rows:
                 if meal.get('MMEAL_SC_NM') == '중식':
-                    meal_info['lunch'] = meal.get('DDISH_NM', '정보 없음').replace('<br/>', '
-')
+                    meal_info['lunch'] = meal.get('DDISH_NM', '정보 없음').replace('<br/>', '\n')
                 elif meal.get('MMEAL_SC_NM') == '석식':
-                    meal_info['dinner'] = meal.get('DDISH_NM', '정보 없음').replace('<br/>', '
-')
+                    meal_info['dinner'] = meal.get('DDISH_NM', '정보 없음').replace('<br/>', '\n')
         else:
             meal_info['error'] = "급식 정보가 없습니다."
         return jsonify(meal_info)

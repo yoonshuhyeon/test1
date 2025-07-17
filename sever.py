@@ -77,7 +77,9 @@ def login():
 
     return jsonify({'message': '로그인 성공'}), 200
 
+# 애플리케이션 컨텍스트 내에서 데이터베이스 테이블 생성
+with app.app_context():
+    db.create_all()
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

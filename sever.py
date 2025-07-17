@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 import jwt
 from flask import Flask, request, jsonify
@@ -157,6 +158,46 @@ def get_meal():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/nutrition', methods=['GET'])
+def get_nutrition():
+    date_str = request.args.get('date', datetime.today().strftime("%Y%m%d"))
+    params = {
+        'KEY': MEAL_API_KEY, 'Type': 'json',
+        'ATPT_OFCDC_SC_CODE': ATPT_OFCDC_SC_CODE,
+        'SD_SCHUL_CODE': SD_SCHUL_CODE, 'MLSV_YMD': date_str
+    }
+    try:
+        response = requests.get(MEAL_API_URL, params=params)
+        response.raise_for_status()
+        data = response.json()
+        service = data.get('mealServiceDietInfo')
+        if not service or len(service) < 2:
+            return jsonify({"error": "급식 정보가 없습니다."}), 404
+        
+        rows = service[1].get('row', [])
+        orplc_info = set()
+        cal_info = set()
+        ntr_info = set()
+        allergy_codes = set()
+
+        for row in rows:
+            if (v := row.get('ORPLC_INFO')): orplc_info.add(v)
+            if (v := row.get('CAL_INFO')): cal_info.add(v)
+            if (v := row.get('NTR_INFO')): ntr_info.add(v)
+            if (dish_name := row.get('DDISH_NM')):
+                found_codes = re.findall(r'\((\d+(?:\.\d+)*)\)', dish_name)
+                for code_group in found_codes:
+                    allergy_codes.update(c.strip() for c in code_group.split('.'))
+
+        return jsonify({
+            "ORPLC_INFO": ', '.join(sorted(orplc_info)) or '정보 없음',
+            "CAL_INFO": ', '.join(sorted(cal_info)) or '정보 없음',
+            "NTR_INFO": ', '.join(sorted(ntr_info)) or '정보 없음',
+            "allergy": ','.join(sorted(list(allergy_codes))) or '정보 없음'
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # =================================
 # MEAL FEEDBACK & LIKE ROUTES
 # =================================
@@ -173,12 +214,12 @@ def submit_like(current_user):
         if existing_like:
             db.session.delete(existing_like)
             db.session.commit()
-            return jsonify({"message": "좋아요를 취소했습니다."}) , 200
+            return jsonify({"message": "좋아요를 취소했습니다."}), 200
         else:
             new_like = MealLike(date=date, meal_type=meal_type, user_id=current_user.id)
             db.session.add(new_like)
             db.session.commit()
-            return jsonify({"message": "좋아요를 눌렀습니다."}) , 201
+            return jsonify({"message": "좋아요를 눌렀습니다."}), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500

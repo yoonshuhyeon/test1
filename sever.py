@@ -8,6 +8,7 @@ from functools import wraps
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import text
 
 app = Flask(__name__)
 CORS(app)
@@ -35,6 +36,7 @@ class User(db.Model):
     grade = db.Column(db.Integer, nullable=False)
     class_number = db.Column(db.Integer, nullable=False)
     student_number = db.Column(db.Integer, nullable=False)
+    last_class_update = db.Column(db.DateTime, nullable=True)
 
 class MealLike(db.Model):
     __tablename__ = 'meal_likes'
@@ -114,8 +116,40 @@ def login():
     user = User.query.filter_by(email=data['email']).first()
     if not user or not check_password_hash(user.password, data['password']):
         return jsonify({'error': '아이디 혹은 비밀번호가 틀렸습니다.'}), 401
+
+    # Check if class info needs to be updated
+    needs_update = False
+    today = datetime.utcnow()
+    march_first_this_year = datetime(today.year, 3, 1)
+
+    if user.last_class_update is None:
+        needs_update = True
+    elif user.last_class_update < march_first_this_year:
+        needs_update = True
+
     token = jwt.encode({'user_id': user.id, 'exp': datetime.utcnow() + timedelta(days=30)}, app.config['SECRET_KEY'], algorithm="HS256")
-    return jsonify({'message': '로그인 성공', 'token': token, 'user_name': user.name}), 200
+    return jsonify({
+        'message': '로그인 성공',
+        'token': token,
+        'user_name': user.name,
+        'needs_class_info': needs_update
+    }), 200
+
+@app.route('/update-class', methods=['POST'])
+@token_required
+def update_class(current_user):
+    data = request.get_json()
+    if not data or not all(k in data for k in ['grade', 'class_number', 'student_number']):
+        return jsonify({'error': '모든 필드를 입력해주세요.'}), 400
+
+    current_user.grade = data['grade']
+    current_user.class_number = data['class_number']
+    current_user.student_number = data['student_number']
+    current_user.last_class_update = datetime.utcnow()
+
+    db.session.commit()
+
+    return jsonify({'message': '반 정보가 성공적으로 업데이트되었습니다.'}), 200
 
 # =================================
 # QR CODE ROUTE
@@ -248,6 +282,13 @@ def index():
 
 with app.app_context():
     db.create_all()
+    try:
+        with db.engine.connect() as connection:
+            connection.execute(text('ALTER TABLE users ADD COLUMN last_class_update DATETIME;'))
+            connection.commit()
+    except Exception as e:
+        # Column already exists, which is fine.
+        print(f"Could not add column: {e}")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

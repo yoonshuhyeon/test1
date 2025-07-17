@@ -278,13 +278,15 @@ def get_like_count(current_user):
 # =================================
 @app.route('/')
 def index():
-    return jsonify({"message": "i want go home"})
+    return jsonify({"message": "집가고 싶다."})
 
 with app.app_context():
     db.create_all()
     try:
         with db.engine.begin() as connection:
-            connection.execute(text('ALTER TABLE users ADD COLUMN last_class_update TIMESTAMP;'))
+            inspector = db.inspect(db.engine)
+            if 'last_class_update' not in [col['name'] for col in inspector.get_columns('users')]:
+                connection.execute(text('ALTER TABLE users ADD COLUMN last_class_update TIMESTAMP;'))
     except Exception as e:
         # Column already exists, which is fine.
         print(f"Could not add column: {e}")

@@ -14,10 +14,7 @@ CORS(app)
 # =================================
 # CONFIGURATION
 # =================================
-# JWT 암호화를 위한 시크릿 키. 반드시 Render 환경 변수에 설정해야 합니다.
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-secret-key-for-dev')
-
-# 데이터베이스 설정
 uri = os.environ.get('DATABASE_URL')
 if uri and uri.startswith("postgres://"):
     uri = uri.replace("postgres://", "postgresql://", 1)
@@ -38,14 +35,12 @@ class User(db.Model):
     class_number = db.Column(db.Integer, nullable=False)
     student_number = db.Column(db.Integer, nullable=False)
 
-# NEW: '좋아요'를 사용자별로 기록하기 위한 새 테이블
 class MealLike(db.Model):
     __tablename__ = 'meal_likes'
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.String(10), nullable=False)
     meal_type = db.Column(db.String(10), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    # 한 사용자가 특정 식사에 한 번만 '좋아요'를 누르도록 보장
     __table_args__ = (db.UniqueConstraint('date', 'meal_type', 'user_id', name='_date_meal_user_uc'),)
 
 class MealFeedback(db.Model):
@@ -55,13 +50,11 @@ class MealFeedback(db.Model):
     meal_type = db.Column(db.String(10), nullable=False)
     rating = db.Column(db.Integer, nullable=False)
     feedback = db.Column(db.Text, nullable=True)
-    # REMOVED: 'likes' 컬럼은 이제 MealLike 테이블로 대체됩니다.
     __table_args__ = (db.UniqueConstraint('date', 'meal_type', name='_date_meal_uc'),)
 
 # =================================
-# AUTHENTICATION DECORATOR
+# AUTHENTICATION DECORATORS
 # =================================
-# NEW: JWT 토큰을 검증하고 현재 사용자를 식별하는 데코레이터
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -71,18 +64,28 @@ def token_required(f):
                 token = request.headers['Authorization'].split(" ")[1]
             except IndexError:
                 return jsonify({'message': 'Token is missing or invalid!'}), 401
-
         if not token:
             return jsonify({'message': 'Token is missing!'}), 401
-
         try:
             data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
             current_user = User.query.get(data['user_id'])
-        except jwt.ExpiredSignatureError:
-            return jsonify({'message': 'Token has expired!'}), 401
         except Exception:
             return jsonify({'message': 'Token is invalid!'}), 401
+        return f(current_user, *args, **kwargs)
+    return decorated
 
+def token_optional(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        current_user = None
+        if 'Authorization' in request.headers:
+            try:
+                token = request.headers['Authorization'].split(" ")[1]
+                data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+                current_user = User.query.get(data['user_id'])
+            except Exception:
+                pass
         return f(current_user, *args, **kwargs)
     return decorated
 
@@ -110,10 +113,7 @@ def login():
     user = User.query.filter_by(email=data['email']).first()
     if not user or not check_password_hash(user.password, data['password']):
         return jsonify({'error': '아이디 혹은 비밀번호가 틀렸습니다.'}), 401
-    token = jwt.encode({
-        'user_id': user.id,
-        'exp': datetime.utcnow() + timedelta(days=30)
-    }, app.config['SECRET_KEY'], algorithm="HS256")
+    token = jwt.encode({'user_id': user.id, 'exp': datetime.utcnow() + timedelta(days=30)}, app.config['SECRET_KEY'], algorithm="HS256")
     return jsonify({'message': '로그인 성공', 'token': token, 'user_name': user.name}), 200
 
 # =================================
@@ -137,11 +137,7 @@ SD_SCHUL_CODE = "9290055"
 @app.route('/meal', methods=['GET'])
 def get_meal():
     date_str = request.args.get('date', datetime.today().strftime("%Y%m%d"))
-    params = {
-        'KEY': MEAL_API_KEY, 'Type': 'json',
-        'ATPT_OFCDC_SC_CODE': ATPT_OFCDC_SC_CODE,
-        'SD_SCHUL_CODE': SD_SCHUL_CODE, 'MLSV_YMD': date_str
-    }
+    params = {'KEY': MEAL_API_KEY, 'Type': 'json', 'ATPT_OFCDC_SC_CODE': ATPT_OFCDC_SC_CODE, 'SD_SCHUL_CODE': SD_SCHUL_CODE, 'MLSV_YMD': date_str}
     try:
         response = requests.get(MEAL_API_URL, params=params)
         response.raise_for_status()
@@ -161,61 +157,9 @@ def get_meal():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/nutrition', methods=['GET'])
-def get_nutrition():
-    date_str = request.args.get('date', datetime.today().strftime("%Y%m%d"))
-    params = {
-        'KEY': MEAL_API_KEY, 'Type': 'json',
-        'ATPT_OFCDC_SC_CODE': ATPT_OFCDC_SC_CODE,
-        'SD_SCHUL_CODE': SD_SCHUL_CODE, 'MLSV_YMD': date_str
-    }
-    try:
-        response = requests.get(MEAL_API_URL, params=params)
-        response.raise_for_status()
-        data = response.json()
-        service = data.get('mealServiceDietInfo')
-        if not service or len(service) < 2:
-            return jsonify({"error": "급식 정보가 없습니다."}), 404
-        rows = service[1].get('row', [])
-        orplc_info, cal_info, ntr_info = set(), set(), set()
-        for row in rows:
-            if (v := row.get('ORPLC_INFO')): orplc_info.add(v)
-            if (v := row.get('CAL_INFO')): cal_info.add(v)
-            if (v := row.get('NTR_INFO')): ntr_info.add(v)
-        return jsonify({
-            "ORPLC_INFO": ', '.join(sorted(orplc_info)) or '정보 없음',
-            "CAL_INFO": ', '.join(sorted(cal_info)) or '정보 없음',
-            "NTR_INFO": ', '.join(sorted(ntr_info)) or '정보 없음',
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 # =================================
 # MEAL FEEDBACK & LIKE ROUTES
 # =================================
-@app.route('/submit_feedback', methods=['POST'])
-@token_required
-def submit_feedback(current_user):
-    data = request.get_json()
-    date = data.get('date', datetime.today().strftime("%Y%m%d"))
-    meal_type = data.get('meal_type')
-    rating = data.get('rating')
-    feedback_text = data.get('feedback')
-    if not all([meal_type, rating]):
-        return jsonify({"error": "date, meal_type, rating are required"}), 400
-    try:
-        feedback_entry = MealFeedback.query.filter_by(date=date, meal_type=meal_type).first()
-        if not feedback_entry:
-            feedback_entry = MealFeedback(date=date, meal_type=meal_type, rating=0)
-            db.session.add(feedback_entry)
-        feedback_entry.rating = int(rating)
-        feedback_entry.feedback = feedback_text
-        db.session.commit()
-        return jsonify({"message": "피드백 제출 완료"}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
 @app.route('/submit_like', methods=['POST'])
 @token_required
 def submit_like(current_user):
@@ -224,31 +168,35 @@ def submit_like(current_user):
     meal_type = data.get('meal_type')
     if not meal_type:
         return jsonify({"error": "meal_type is required"}), 400
-    existing_like = MealLike.query.filter_by(
-        date=date, meal_type=meal_type, user_id=current_user.id
-    ).first()
+    existing_like = MealLike.query.filter_by(date=date, meal_type=meal_type, user_id=current_user.id).first()
     try:
         if existing_like:
             db.session.delete(existing_like)
             db.session.commit()
-            return jsonify({"message": "좋아요를 취소했습니다."}), 200
+            return jsonify({"message": "좋아요를 취소했습니다."}) , 200
         else:
             new_like = MealLike(date=date, meal_type=meal_type, user_id=current_user.id)
             db.session.add(new_like)
             db.session.commit()
-            return jsonify({"message": "좋아요를 눌렀습니다."}), 201
+            return jsonify({"message": "좋아요를 눌렀습니다."}) , 201
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/get_like_count', methods=['GET'])
-def get_like_count():
+@token_optional
+def get_like_count(current_user):
     date = request.args.get('date', datetime.today().strftime("%Y%m%d"))
     meal_type = request.args.get('meal_type')
     if not meal_type:
         return jsonify({"error": "meal_type is required"}), 400
     count = MealLike.query.filter_by(date=date, meal_type=meal_type).count()
-    return jsonify({"like_count": count}), 200
+    user_has_liked = False
+    if current_user:
+        like = MealLike.query.filter_by(date=date, meal_type=meal_type, user_id=current_user.id).first()
+        if like:
+            user_has_liked = True
+    return jsonify({"like_count": count, "user_has_liked": user_has_liked}), 200
 
 # =================================
 # APP INITIALIZATION

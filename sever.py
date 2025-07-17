@@ -1,7 +1,9 @@
 import os
 import requests
+import jwt
 from flask import Flask, request, jsonify
-from datetime import datetime
+from datetime import datetime, timedelta
+from functools import wraps
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -10,9 +12,12 @@ app = Flask(__name__)
 CORS(app)
 
 # =================================
-# DATABASE CONFIGURATION
+# CONFIGURATION
 # =================================
-# Render의 DATABASE_URL을 사용하고, postgresql dialect에 맞게 수정
+# JWT 암호화를 위한 시크릿 키. 반드시 Render 환경 변수에 설정해야 합니다.
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-secret-key-for-dev')
+
+# 데이터베이스 설정
 uri = os.environ.get('DATABASE_URL')
 if uri and uri.startswith("postgres://"):
     uri = uri.replace("postgres://", "postgresql://", 1)
@@ -33,17 +38,53 @@ class User(db.Model):
     class_number = db.Column(db.Integer, nullable=False)
     student_number = db.Column(db.Integer, nullable=False)
 
+# NEW: '좋아요'를 사용자별로 기록하기 위한 새 테이블
+class MealLike(db.Model):
+    __tablename__ = 'meal_likes'
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.String(10), nullable=False)
+    meal_type = db.Column(db.String(10), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # 한 사용자가 특정 식사에 한 번만 '좋아요'를 누르도록 보장
+    __table_args__ = (db.UniqueConstraint('date', 'meal_type', 'user_id', name='_date_meal_user_uc'),)
+
 class MealFeedback(db.Model):
     __tablename__ = 'meal_feedback'
     id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.String(10), nullable=False) # "YYYYMMDD"
-    meal_type = db.Column(db.String(10), nullable=False) # "lunch", "dinner"
+    date = db.Column(db.String(10), nullable=False)
+    meal_type = db.Column(db.String(10), nullable=False)
     rating = db.Column(db.Integer, nullable=False)
     feedback = db.Column(db.Text, nullable=True)
-    likes = db.Column(db.Integer, default=0)
-    # 날짜와 식사 종류별로 하나의 피드백만 존재하도록 설정
+    # REMOVED: 'likes' 컬럼은 이제 MealLike 테이블로 대체됩니다.
     __table_args__ = (db.UniqueConstraint('date', 'meal_type', name='_date_meal_uc'),)
 
+# =================================
+# AUTHENTICATION DECORATOR
+# =================================
+# NEW: JWT 토큰을 검증하고 현재 사용자를 식별하는 데코레이터
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        if 'Authorization' in request.headers:
+            try:
+                token = request.headers['Authorization'].split(" ")[1]
+            except IndexError:
+                return jsonify({'message': 'Token is missing or invalid!'}), 401
+
+        if not token:
+            return jsonify({'message': 'Token is missing!'}), 401
+
+        try:
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+            current_user = User.query.get(data['user_id'])
+        except jwt.ExpiredSignatureError:
+            return jsonify({'message': 'Token has expired!'}), 401
+        except Exception:
+            return jsonify({'message': 'Token is invalid!'}), 401
+
+        return f(current_user, *args, **kwargs)
+    return decorated
 
 # =================================
 # USER AUTHENTICATION ROUTES
@@ -51,25 +92,12 @@ class MealFeedback(db.Model):
 @app.route('/signup', methods=['POST'])
 def signup():
     data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Invalid JSON'}), 400
-
-    required_fields = ['email', 'password', 'name', 'grade', 'class_number', 'student_number']
-    if not all(field in data for field in required_fields):
+    if not data or not all(k in data for k in ['email', 'password', 'name', 'grade', 'class_number', 'student_number']):
         return jsonify({'error': '모든 필드를 입력해주세요.'}), 400
-
     if User.query.filter_by(email=data['email']).first():
         return jsonify({'error': '이미 사용중인 이메일입니다.'}), 409
-
     hashed_password = generate_password_hash(data['password'])
-    new_user = User(
-        email=data['email'],
-        password=hashed_password,
-        name=data['name'],
-        grade=data['grade'],
-        class_number=data['class_number'],
-        student_number=data['student_number']
-    )
+    new_user = User(email=data['email'], password=hashed_password, name=data['name'], grade=data['grade'], class_number=data['class_number'], student_number=data['student_number'])
     db.session.add(new_user)
     db.session.commit()
     return jsonify({'message': '회원가입에 성공했습니다.'}), 201
@@ -79,32 +107,23 @@ def login():
     data = request.get_json()
     if not data or not data.get('email') or not data.get('password'):
         return jsonify({'error': '이메일과 비밀번호를 입력해주세요.'}), 400
-
     user = User.query.filter_by(email=data['email']).first()
-
     if not user or not check_password_hash(user.password, data['password']):
         return jsonify({'error': '아이디 혹은 비밀번호가 틀렸습니다.'}), 401
-
-    return jsonify({'message': '로그인 성공'}), 200
+    token = jwt.encode({
+        'user_id': user.id,
+        'exp': datetime.utcnow() + timedelta(days=30)
+    }, app.config['SECRET_KEY'], algorithm="HS256")
+    return jsonify({'message': '로그인 성공', 'token': token, 'user_name': user.name}), 200
 
 # =================================
 # QR CODE ROUTE
 # =================================
-def github_qr_url(filename):
-    return f"https://raw.githubusercontent.com/yoonshuhyeon/test1/main/qr_codes/{filename}"
-
-@app.route('/generate_qr', methods=['POST'])
-def generate_qr():
-    data = request.get_json()
-    grade = str(data.get('grade', '')).strip()
-    class_num = str(data.get('class_num', '')).strip()
-    student_num = str(data.get('student_num', '')).strip()
-    
-    if not grade or not class_num or not student_num:
-        return jsonify({"error": "grade, class_num, student_num are required"}), 400
-
-    filename = f"{grade}_{class_num}_{student_num}.png"
-    qr_url = github_qr_url(filename)
+@app.route('/generate_qr', methods=['GET'])
+@token_required
+def generate_qr(current_user):
+    filename = f"{current_user.grade}_{current_user.class_number}_{current_user.student_number}.png"
+    qr_url = f"https://raw.githubusercontent.com/yoonshuhyeon/test1/main/qr_codes/{filename}"
     return jsonify({"qr_code_url": qr_url})
 
 # =================================
@@ -157,16 +176,12 @@ def get_nutrition():
         service = data.get('mealServiceDietInfo')
         if not service or len(service) < 2:
             return jsonify({"error": "급식 정보가 없습니다."}), 404
-        
         rows = service[1].get('row', [])
-        orplc_info = set()
-        cal_info = set()
-        ntr_info = set()
+        orplc_info, cal_info, ntr_info = set(), set(), set()
         for row in rows:
             if (v := row.get('ORPLC_INFO')): orplc_info.add(v)
             if (v := row.get('CAL_INFO')): cal_info.add(v)
             if (v := row.get('NTR_INFO')): ntr_info.add(v)
-
         return jsonify({
             "ORPLC_INFO": ', '.join(sorted(orplc_info)) or '정보 없음',
             "CAL_INFO": ', '.join(sorted(cal_info)) or '정보 없음',
@@ -176,25 +191,23 @@ def get_nutrition():
         return jsonify({"error": str(e)}), 500
 
 # =================================
-# MEAL FEEDBACK ROUTES
+# MEAL FEEDBACK & LIKE ROUTES
 # =================================
 @app.route('/submit_feedback', methods=['POST'])
-def submit_feedback():
+@token_required
+def submit_feedback(current_user):
     data = request.get_json()
     date = data.get('date', datetime.today().strftime("%Y%m%d"))
     meal_type = data.get('meal_type')
     rating = data.get('rating')
     feedback_text = data.get('feedback')
-
     if not all([meal_type, rating]):
         return jsonify({"error": "date, meal_type, rating are required"}), 400
-    
     try:
         feedback_entry = MealFeedback.query.filter_by(date=date, meal_type=meal_type).first()
         if not feedback_entry:
             feedback_entry = MealFeedback(date=date, meal_type=meal_type, rating=0)
             db.session.add(feedback_entry)
-
         feedback_entry.rating = int(rating)
         feedback_entry.feedback = feedback_text
         db.session.commit()
@@ -204,24 +217,26 @@ def submit_feedback():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/submit_like', methods=['POST'])
-def submit_like():
+@token_required
+def submit_like(current_user):
     data = request.get_json()
     date = data.get('date', datetime.today().strftime("%Y%m%d"))
     meal_type = data.get('meal_type')
-
     if not meal_type:
         return jsonify({"error": "meal_type is required"}), 400
-
+    existing_like = MealLike.query.filter_by(
+        date=date, meal_type=meal_type, user_id=current_user.id
+    ).first()
     try:
-        feedback_entry = MealFeedback.query.filter_by(date=date, meal_type=meal_type).first()
-        if not feedback_entry:
-            feedback_entry = MealFeedback(date=date, meal_type=meal_type, rating=3, likes=1)
-            db.session.add(feedback_entry)
+        if existing_like:
+            db.session.delete(existing_like)
+            db.session.commit()
+            return jsonify({"message": "좋아요를 취소했습니다."}), 200
         else:
-            feedback_entry.likes = (feedback_entry.likes or 0) + 1
-        
-        db.session.commit()
-        return jsonify({"message": "좋아요 처리 완료"}), 200
+            new_like = MealLike(date=date, meal_type=meal_type, user_id=current_user.id)
+            db.session.add(new_like)
+            db.session.commit()
+            return jsonify({"message": "좋아요를 눌렀습니다."}), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
@@ -230,16 +245,10 @@ def submit_like():
 def get_like_count():
     date = request.args.get('date', datetime.today().strftime("%Y%m%d"))
     meal_type = request.args.get('meal_type')
-
     if not meal_type:
         return jsonify({"error": "meal_type is required"}), 400
-
-    feedback_entry = MealFeedback.query.filter_by(date=date, meal_type=meal_type).first()
-    
-    if feedback_entry:
-        return jsonify({"like_count": feedback_entry.likes or 0}), 200
-    else:
-        return jsonify({"like_count": 0}), 200
+    count = MealLike.query.filter_by(date=date, meal_type=meal_type).count()
+    return jsonify({"like_count": count}), 200
 
 # =================================
 # APP INITIALIZATION
@@ -248,7 +257,6 @@ def get_like_count():
 def index():
     return jsonify({"message": "server ok"})
 
-# 앱 시작 시 데이터베이스 테이블 자동 생성
 with app.app_context():
     db.create_all()
 

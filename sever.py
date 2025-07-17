@@ -285,7 +285,6 @@ with app.app_context():
     try:
         with db.engine.connect() as connection:
             connection.execute(text('ALTER TABLE users ADD COLUMN last_class_update DATETIME;'))
-            connection.commit()
     except Exception as e:
         # Column already exists, which is fine.
         print(f"Could not add column: {e}")

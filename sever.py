@@ -278,7 +278,7 @@ def get_like_count(current_user):
 # =================================
 @app.route('/')
 def index():
-    return jsonify({"message": "server ok"})
+    return jsonify({"message": "i want go home"})
 
 with app.app_context():
     db.create_all()

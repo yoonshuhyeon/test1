@@ -2,7 +2,7 @@ import os
 import re
 import requests
 import jwt
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from datetime import datetime, timedelta
 from functools import wraps
 from flask_cors import CORS
@@ -278,7 +278,7 @@ def get_like_count(current_user):
 # =================================
 @app.route('/')
 def index():
-    return jsonify({"message": "집가고 싶다."})
+    return send_from_directory('.', 'index.html')
 
 with app.app_context():
     db.create_all()

@@ -13,6 +13,9 @@ from sqlalchemy import text
 app = Flask(__name__)
 CORS(app)
 
+# portal-project 폴더의 절대 경로 설정
+PORTAL_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'portal-project'))
+
 # =================================
 # CONFIGURATION
 # =================================
@@ -299,15 +302,19 @@ def get_like_count(current_user):
     return jsonify({"like_count": count, "user_has_liked": user_has_liked}), 200
 
 # =================================
-# APP INITIALIZATION
+# WEB PAGE SERVING (Catch-all)
 # =================================
-@app.route('/')
-def portal_home():
-    return send_from_directory(app.static_folder, 'index.html')
-
-@app.route('/login')
-def portal_login():
-    return send_from_directory(app.static_folder, 'login.html')
+@app.route('/', defaults={'path': 'index.html'})
+@app.route('/<path:path>')
+def serve_portal(path):
+    # 요청된 경로가 파일이 아니거나 존재하지 않으면 index.html을 반환 (SPA처럼 작동)
+    if '.' not in path or not os.path.exists(os.path.join(PORTAL_DIR, path)):
+        # /login 같은 경로를 직접 쳤을 때 login.html을 보여주기 위한 처리
+        if os.path.exists(os.path.join(PORTAL_DIR, f"{path}.html")):
+            return send_from_directory(PORTAL_DIR, f"{path}.html")
+        return send_from_directory(PORTAL_DIR, 'index.html')
+    
+    return send_from_directory(PORTAL_DIR, path)
 
 with app.app_context():
     db.create_all()

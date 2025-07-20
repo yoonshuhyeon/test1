@@ -14,7 +14,7 @@ app = Flask(__name__)
 CORS(app)
 
 # portal-project 폴더의 절대 경로 설정
-PORTAL_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'portal-project'))
+PORTAL_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'portal-project'))
 
 # =================================
 # CONFIGURATION

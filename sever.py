@@ -95,7 +95,7 @@ def token_optional(f):
 # =================================
 # USER AUTHENTICATION ROUTES
 # =================================
-@app.route('/signup', methods=['POST'])
+@app.route('/api/signup', methods=['POST'])
 def signup():
     data = request.get_json()
     if not data or not all(k in data for k in ['email', 'password', 'name', 'grade', 'class_number', 'student_number']):
@@ -108,7 +108,7 @@ def signup():
     db.session.commit()
     return jsonify({'message': '회원가입에 성공했습니다.'}), 201
 
-@app.route('/login', methods=['POST'])
+@app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
     if not data or not data.get('email') or not data.get('password'):
@@ -135,7 +135,7 @@ def login():
         'needs_class_info': needs_update
     }), 200
 
-@app.route('/update-class', methods=['POST'])
+@app.route('/api/update-class', methods=['POST'])
 @token_required
 def update_class(current_user):
     data = request.get_json()
@@ -154,7 +154,7 @@ def update_class(current_user):
 # =================================
 # QR CODE ROUTE
 # =================================
-@app.route('/generate_qr', methods=['GET'])
+@app.route('/api/generate_qr', methods=['GET'])
 @token_required
 def generate_qr(current_user):
     filename = f"{current_user.grade}_{current_user.class_number}_{current_user.student_number}.png"
@@ -169,7 +169,7 @@ MEAL_API_KEY = "368ccd7447b04140b197c937a072fb76"
 ATPT_OFCDC_SC_CODE = "T10"
 SD_SCHUL_CODE = "9290055"
 
-@app.route('/meal', methods=['GET'])
+@app.route('/api/meal', methods=['GET'])
 def get_meal():
     date_str = request.args.get('date', datetime.today().strftime("%Y%m%d"))
     params = {'KEY': MEAL_API_KEY, 'Type': 'json', 'ATPT_OFCDC_SC_CODE': ATPT_OFCDC_SC_CODE, 'SD_SCHUL_CODE': SD_SCHUL_CODE, 'MLSV_YMD': date_str}
@@ -192,7 +192,7 @@ def get_meal():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/nutrition', methods=['GET'])
+@app.route('/api/nutrition', methods=['GET'])
 def get_nutrition():
     date_str = request.args.get('date', datetime.today().strftime("%Y%m%d"))
     params = {
@@ -235,7 +235,7 @@ def get_nutrition():
 # =================================
 # MEAL FEEDBACK & LIKE ROUTES
 # =================================
-@app.route('/submit_like', methods=['POST'])
+@app.route('/api/submit_like', methods=['POST'])
 @token_required
 def submit_like(current_user):
     data = request.get_json()
@@ -258,7 +258,7 @@ def submit_like(current_user):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-@app.route('/get_like_count', methods=['GET'])
+@app.route('/api/get_like_count', methods=['GET'])
 @token_optional
 def get_like_count(current_user):
     date = request.args.get('date', datetime.today().strftime("%Y%m%d"))
@@ -276,6 +276,26 @@ def get_like_count(current_user):
 # =================================
 # APP INITIALIZATION
 # =================================
+@app.route('/login')
+def login_page():
+    return send_from_directory('.', 'login.html')
+
+@app.route('/signup')
+def signup_page():
+    return send_from_directory('.', 'signup.html')
+
+@app.route('/nutrition')
+def nutrition_page():
+    return send_from_directory('.', 'nutrition.html')
+
+@app.route('/feedback')
+def feedback_page():
+    return send_from_directory('.', 'feedback.html')
+
+@app.route('/qr')
+def qr_page():
+    return send_from_directory('.', 'qr.html')
+
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')

@@ -303,11 +303,11 @@ def get_like_count(current_user):
 # =================================
 @app.route('/')
 def portal_home():
-    return send_from_directory(app.static_folder, 'index.html')
+    return send_from_directory(app.static_folder, 'portal-project/index.html')
 
 @app.route('/login')
 def portal_login():
-    return send_from_directory(app.static_folder, 'login.html')
+    return send_from_directory(app.static_folder, 'portal-project/login.html')
 
 with app.app_context():
     db.create_all()

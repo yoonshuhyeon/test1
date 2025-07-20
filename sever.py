@@ -21,7 +21,10 @@ PORTAL_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'port
 # =================================
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-secret-key-for-dev')
 uri = os.environ.get('DATABASE_URL')
-if uri and uri.startswith("postgres://"):
+if not uri:
+    # 로컬 테스트용 SQLite 데이터베이스 설정
+    uri = f"sqlite:///{os.path.join(os.path.dirname(os.path.abspath(__file__)), 'local_database.db')}"
+elif uri.startswith("postgres://"):
     uri = uri.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -327,6 +330,4 @@ with app.app_context():
         # Column already exists, which is fine.
         print(f"Could not add column: {e}")
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+

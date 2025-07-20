@@ -305,19 +305,31 @@ def get_like_count(current_user):
     return jsonify({"like_count": count, "user_has_liked": user_has_liked}), 200
 
 # =================================
-# WEB PAGE SERVING (Catch-all)
+# WEB PAGE SERVING
 # =================================
-@app.route('/', defaults={'path': 'index.html'})
-@app.route('/<path:path>')
-def serve_portal(path):
-    # 요청된 경로가 파일이 아니거나 존재하지 않으면 index.html을 반환 (SPA처럼 작동)
-    if '.' not in path or not os.path.exists(os.path.join(PORTAL_DIR, path)):
-        # /login 같은 경로를 직접 쳤을 때 login.html을 보여주기 위한 처리
-        if os.path.exists(os.path.join(PORTAL_DIR, f"{path}.html")):
-            return send_from_directory(PORTAL_DIR, f"{path}.html")
-        return send_from_directory(PORTAL_DIR, 'index.html')
+@app.route('/')
+def serve_index():
+    # 토큰이 없으면 로그인 페이지로 리다이렉트
+    if 'Authorization' not in request.headers:
+        return redirect(url_for('serve_login'))
     
-    return send_from_directory(PORTAL_DIR, path)
+    # 토큰이 있지만 유효하지 않으면 로그인 페이지로 리다이렉트 (선택 사항, 프론트엔드에서 처리 가능)
+    # try:
+    #     token = request.headers['Authorization'].split(" ")[1]
+    #     jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+    # except Exception:
+    #     return redirect(url_for('serve_login'))
+
+    return send_from_directory(PORTAL_DIR, 'index.html')
+
+@app.route('/login')
+def serve_login():
+    return send_from_directory(PORTAL_DIR, 'login.html')
+
+@app.route('/<path:filename>')
+def serve_static_files(filename):
+    # 정적 파일 (css, js, img 등)은 인증 없이 제공
+    return send_from_directory(PORTAL_DIR, filename)
 
 with app.app_context():
     db.create_all()

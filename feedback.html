@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>식단 피드백</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>식단 피드백</h1>
+        <div class="date-selector">
+            <input type="date" id="feedback-date">
+            <select id="meal-type">
+                <option value="lunch">점심</option>
+                <option value="dinner">저녁</option>
+            </select>
+        </div>
+        <div id="feedback-meal-info">
+            <p id="feedback-menu">메뉴 정보</p>
+            <button id="like-button">좋아요</button>
+            <span id="like-count">0</span>
+        </div>
+        <a href="/">메인으로</a>
+    </div>
+    <script src="/static/feedback.js"></script>
+</body>
+</html>

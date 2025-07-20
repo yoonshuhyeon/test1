@@ -162,19 +162,20 @@ def generate_qr(current_user):
     return jsonify({"qr_code_url": qr_url})
 
 # =================================
-# NEIS MEAL API ROUTES
+# NEIS API ROUTES
 # =================================
-MEAL_API_URL = "https://open.neis.go.kr/hub/mealServiceDietInfo"
+NEIS_API_URL = "https://open.neis.go.kr/hub/"
 MEAL_API_KEY = "368ccd7447b04140b197c937a072fb76"
 ATPT_OFCDC_SC_CODE = "T10"
 SD_SCHUL_CODE = "9290055"
 
 @app.route('/api/meal', methods=['GET'])
-def get_meal():
+@token_required
+def get_meal(current_user):
     date_str = request.args.get('date', datetime.today().strftime("%Y%m%d"))
     params = {'KEY': MEAL_API_KEY, 'Type': 'json', 'ATPT_OFCDC_SC_CODE': ATPT_OFCDC_SC_CODE, 'SD_SCHUL_CODE': SD_SCHUL_CODE, 'MLSV_YMD': date_str}
     try:
-        response = requests.get(MEAL_API_URL, params=params)
+        response = requests.get(NEIS_API_URL + "mealServiceDietInfo", params=params)
         response.raise_for_status()
         data = response.json()
         meal_info = {'lunch': '정보 없음', 'dinner': '정보 없음'}
@@ -189,6 +190,30 @@ def get_meal():
         else:
             meal_info['error'] = "급식 정보가 없습니다."
         return jsonify(meal_info)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/timetable', methods=['GET'])
+@token_required
+def get_timetable(current_user):
+    date_str = request.args.get('date', datetime.today().strftime("%Y%m%d"))
+    params = {
+        'KEY': MEAL_API_KEY, 'Type': 'json', 
+        'ATPT_OFCDC_SC_CODE': ATPT_OFCDC_SC_CODE, 
+        'SD_SCHUL_CODE': SD_SCHUL_CODE, 
+        'ALL_TI_YMD': date_str,
+        'GRADE': str(current_user.grade),
+        'CLASS_NM': str(current_user.class_number)
+    }
+    try:
+        response = requests.get(NEIS_API_URL + "hisTimetable", params=params)
+        response.raise_for_status()
+        data = response.json()
+        timetable_info = []
+        service = data.get('hisTimetable')
+        if service and len(service) > 1:
+            timetable_info = service[1].get('row', [])
+        return jsonify(timetable_info)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -276,29 +301,13 @@ def get_like_count(current_user):
 # =================================
 # APP INITIALIZATION
 # =================================
-@app.route('/login')
-def login_page():
-    return send_from_directory('.', 'login.html')
-
-@app.route('/signup')
-def signup_page():
-    return send_from_directory('.', 'signup.html')
-
-@app.route('/nutrition')
-def nutrition_page():
-    return send_from_directory('.', 'nutrition.html')
-
-@app.route('/feedback')
-def feedback_page():
-    return send_from_directory('.', 'feedback.html')
-
-@app.route('/qr')
-def qr_page():
-    return send_from_directory('.', 'qr.html')
-
 @app.route('/')
-def index():
-    return send_from_directory('.', 'index.html')
+def portal_home():
+    return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/login')
+def portal_login():
+    return send_from_directory(app.static_folder, 'login.html')
 
 with app.app_context():
     db.create_all()

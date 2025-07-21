@@ -15,7 +15,8 @@ PORTAL_DIR = os.path.abspath(os.path.dirname(__file__))
 
 app = Flask(__name__, 
             template_folder=PORTAL_DIR, 
-            static_folder=PORTAL_DIR)
+            static_folder=PORTAL_DIR,
+            static_url_path='/')
 CORS(app)
 
 # =================================
@@ -38,7 +39,7 @@ db = SQLAlchemy(app)
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    username = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(256), nullable=False)
     name = db.Column(db.String(80), nullable=False)
     grade = db.Column(db.Integer, nullable=False)
@@ -106,12 +107,12 @@ def token_optional(f):
 @app.route('/api/signup', methods=['POST'])
 def signup():
     data = request.get_json()
-    if not data or not all(k in data for k in ['email', 'password', 'name', 'grade', 'class_number', 'student_number']):
+    if not data or not all(k in data for k in ['username', 'password', 'name', 'grade', 'class_number', 'student_number']):
         return jsonify({'error': '모든 필드를 입력해주세요.'}), 400
-    if User.query.filter_by(email=data['email']).first():
+    if User.query.filter_by(username=data['username']).first():
         return jsonify({'error': '이미 사용중인 아이디입니다.'}), 409
     hashed_password = generate_password_hash(data['password'])
-    new_user = User(email=data['email'], password=hashed_password, name=data['name'], grade=data['grade'], class_number=data['class_number'], student_number=data['student_number'])
+    new_user = User(username=data['username'], password=hashed_password, name=data['name'], grade=data['grade'], class_number=data['class_number'], student_number=data['student_number'])
     db.session.add(new_user)
     db.session.commit()
     return jsonify({'message': '회원가입에 성공했습니다.'}), 201
@@ -119,9 +120,9 @@ def signup():
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
-    if not data or not data.get('email') or not data.get('password'):
+    if not data or not data.get('username') or not data.get('password'):
         return jsonify({'error': '아이디과 비밀번호를 입력해주세요.'}), 400
-    user = User.query.filter_by(email=data['email']).first()
+    user = User.query.filter_by(username=data['username']).first()
     if not user or not check_password_hash(user.password, data['password']):
         return jsonify({'error': '아이디 혹은 비밀번호가 틀렸습니다.'}), 401
 
@@ -174,11 +175,12 @@ def generate_qr(current_user):
 # =================================
 NEIS_API_URL = "https://open.neis.go.kr/hub/"
 MEAL_API_KEY = "368ccd7447b04140b197c937a072fb76"
+TIMETABLE_API_KEY = "cfddc0f0e5e14a04bafd805f22022fbd"
 ATPT_OFCDC_SC_CODE = "T10"
 SD_SCHUL_CODE = "9290055"
 
 @app.route('/api/meal', methods=['GET'])
-@token_required
+@token_optional
 def get_meal(current_user):
     date_str = request.args.get('date', datetime.today().strftime("%Y%m%d"))
     params = {'KEY': MEAL_API_KEY, 'Type': 'json', 'ATPT_OFCDC_SC_CODE': ATPT_OFCDC_SC_CODE, 'SD_SCHUL_CODE': SD_SCHUL_CODE, 'MLSV_YMD': date_str}
@@ -202,16 +204,32 @@ def get_meal(current_user):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/timetable', methods=['GET'])
-@token_required
+@token_optional
 def get_timetable(current_user):
     date_str = request.args.get('date', datetime.today().strftime("%Y%m%d"))
+    
+    grade = request.args.get('grade')
+    class_number = request.args.get('class_number')
+
+    print(f"DEBUG: Initial grade: {grade}, class_number: {class_number}")
+
+    if current_user:
+        grade = str(current_user.grade)
+        class_number = str(current_user.class_number)
+        print(f"DEBUG: Grade from user: {grade}, class_number from user: {class_number}")
+
+    print(f"DEBUG: Final grade: {grade}, class_number: {class_number}")
+
+    if not grade or not class_number:
+        return jsonify({"error": "학년과 반 정보가 필요합니다."}), 400
+
     params = {
-        'KEY': MEAL_API_KEY, 'Type': 'json', 
+        'KEY': TIMETABLE_API_KEY, 'Type': 'json', 
         'ATPT_OFCDC_SC_CODE': ATPT_OFCDC_SC_CODE, 
         'SD_SCHUL_CODE': SD_SCHUL_CODE, 
         'ALL_TI_YMD': date_str,
-        'GRADE': str(current_user.grade),
-        'CLASS_NM': str(current_user.class_number)
+        'GRADE': grade,
+        'CLASS_NM': class_number
     }
     try:
         response = requests.get(NEIS_API_URL + "hisTimetable", params=params)

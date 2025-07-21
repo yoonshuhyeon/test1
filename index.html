@@ -34,32 +34,67 @@
                 <!-- Meal Section -->
                 <section class="mb-4">
                     <h4 class="section-title">오늘의 급식</h4>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="meal-date" class="form-label">날짜 선택</label>
+                            <input type="date" class="form-control" id="meal-date">
+                        </div>
+                    </div>
                     <div id="meal-content" class="row">
-                        {% if user_name %}
                         <div class="col-12 text-center p-5">
                             <div class="spinner-border text-success" role="status">
                                 <span class="visually-hidden">Loading...</span>
                             </div>
                         </div>
-                        {% else %}
-                        <div class="col-12"><div class="alert alert-info">로그인 후 급식 정보를 이용해주세요.</div></div>
-                        {% endif %}
                     </div>
                 </section>
 
                 <!-- Timetable Section -->
                 <section class="mb-4">
                     <h4 class="section-title">오늘의 시간표</h4>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label for="grade-select" class="form-label">학년</label>
+                            <select class="form-select" id="grade-select">
+                                <option value="1">1학년</option>
+                                <option value="2">2학년</option>
+                                <option value="3">3학년</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="class-select" class="form-label">반</label>
+                            <select class="form-select" id="class-select">
+                                <option value="1">1반</option>
+                                <option value="2">2반</option>
+                                <option value="3">3반</option>
+                                <option value="4">4반</option>
+                                <option value="5">5반</option>
+                                <option value="6">6반</option>
+                                <option value="7">7반</option>
+                                <option value="8">8반</option>
+                                <option value="9">9반</option>
+                                <option value="10">10반</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button class="btn btn-primary w-100" id="fetch-timetable-button">시간표 조회</button>
+                        </div>
+                    </div>
+                    <div class="row mb-3 align-items-end">
+                        <div class="col-md-6">
+                            <label for="timetable-date" class="form-label">날짜 선택</label>
+                            <input type="date" class="form-control" id="timetable-date">
+                        </div>
+                        <div class="col-md-6">
+                            <button class="btn btn-outline-secondary w-100" id="prev-week-button">이전 주</button>
+                        </div>
+                    </div>
                     <div id="timetable-content">
-                        {% if user_name %}
-                         <div class="col-12 text-center p-5">
+                        <div class="col-12 text-center p-5">
                             <div class="spinner-border text-success" role="status">
                                 <span class="visually-hidden">Loading...</span>
                             </div>
                         </div>
-                        {% else %}
-                        <div class="col-12"><div class="alert alert-info">로그인 후 시간표 정보를 이용해주세요.</div></div>
-                        {% endif %}
                     </div>
                 </section>
             </div>
@@ -71,9 +106,9 @@
                     <h5 class="mb-3">주요 링크</h5>
                     <div class="d-grid gap-2">
                         <a href="https://school.jje.go.kr/hallim-h/main.do" class="btn btn-outline-success" target="_blank">학교 홈페이지</a>
-                        <a href="https://school.jje.go.kr/hallim-h/sub.do?m=050500" class="btn btn-outline-success" target="_blank">도서관</a>
-                        <a href="https://school.jje.go.kr/hallim-h/sub.do?m=020901" class="btn btn-outline-success" target="_blank">학사일정</a>
-                        <a href="https://school.jje.go.kr/hallim-h/sub.do?m=0203" class="btn btn-outline-success" target="_blank">공지사항</a>
+                        <a href="https://read365.edunet.net/PureScreen/SchoolSearch?schoolName=한림고등학교&provCode=T10&neisCode=T100000129" class="btn btn-outline-success" target="_blank">도서관</a>
+                        <a href="https://school.jje.go.kr/hallim-h/schl/sv/schdulView/schdulCalendarView.do?mi=104800&schdlKndSn=104800" class="btn btn-outline-success" target="_blank">학사일정</a>
+                        <a href="https://school.jje.go.kr/hallim-h/na/ntt/selectNttList.do?mi=104801&bbsId=118779" class="btn btn-outline-success" target="_blank">공지사항</a>
                     </div>
                 </aside>
             </div>

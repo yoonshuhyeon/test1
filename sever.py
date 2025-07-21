@@ -2,7 +2,7 @@ import os
 import re
 import requests
 import jwt
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, redirect, url_for
 from datetime import datetime, timedelta
 from functools import wraps
 from flask_cors import CORS
@@ -10,7 +10,9 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import text
 
-app = Flask(__name__)
+app = Flask(__name__, 
+            template_folder=PORTAL_DIR, 
+            static_folder=PORTAL_DIR)
 CORS(app)
 
 # portal-project 폴더의 절대 경로 설정
@@ -309,27 +311,31 @@ def get_like_count(current_user):
 # =================================
 @app.route('/')
 def serve_index():
-    # 토큰이 없으면 로그인 페이지로 리다이렉트
-    if 'Authorization' not in request.headers:
-        return redirect(url_for('serve_login'))
-    
-    # 토큰이 있지만 유효하지 않으면 로그인 페이지로 리다이렉트 (선택 사항, 프론트엔드에서 처리 가능)
-    # try:
-    #     token = request.headers['Authorization'].split(" ")[1]
-    #     jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
-    # except Exception:
-    #     return redirect(url_for('serve_login'))
+    user_name = None
+    # 토큰이 있다면 사용자 이름 가져오기
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+        try:
+            token_data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+            current_user = User.query.get(token_data['user_id'])
+            if current_user:
+                user_name = current_user.name
+        except Exception as e:
+            print(f"Token decode error: {e}")
 
-    return send_from_directory(PORTAL_DIR, 'index.html')
+    return render_template('index.html', user_name=user_name)
 
 @app.route('/login')
 def serve_login():
-    return send_from_directory(PORTAL_DIR, 'login.html')
+    return render_template('login.html')
 
-@app.route('/<path:filename>')
-def serve_static_files(filename):
-    # 정적 파일 (css, js, img 등)은 인증 없이 제공
-    return send_from_directory(PORTAL_DIR, filename)
+@app.route('/logout')
+def logout():
+    # 프론트엔드에서 localStorage를 지우고 리다이렉트하므로, 서버에서는 특별한 처리 없이 성공 응답
+    return jsonify({'message': 'Logged out'}), 200
+
+# 정적 파일 (css, js, img 등)은 Flask의 static_folder가 자동으로 서빙합니다.
 
 with app.app_context():
     db.create_all()

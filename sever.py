@@ -2,7 +2,7 @@ import os
 import re
 import requests
 import jwt
-from flask import Flask, request, jsonify, send_from_directory, redirect, url_for
+from flask import Flask, request, jsonify, send_from_directory, redirect, url_for, render_template
 from datetime import datetime, timedelta
 from functools import wraps
 from flask_cors import CORS
@@ -10,13 +10,13 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import text
 
+# portal-project 폴더의 절대 경로 설정
+PORTAL_DIR = os.path.abspath(os.path.dirname(__file__))
+
 app = Flask(__name__, 
             template_folder=PORTAL_DIR, 
             static_folder=PORTAL_DIR)
 CORS(app)
-
-# portal-project 폴더의 절대 경로 설정
-PORTAL_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # =================================
 # CONFIGURATION

@@ -8,7 +8,7 @@ from functools import wraps
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 
 # portal-project 폴더의 절대 경로 설정
 PORTAL_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -356,6 +356,17 @@ def logout():
 # 정적 파일 (css, js, img 등)은 Flask의 static_folder가 자동으로 서빙합니다.
 
 with app.app_context():
+    # Check and migrate schema if necessary
+    inspector = inspect(db.engine)
+    if 'users' in inspector.get_table_names():
+        columns = [col['name'] for col in inspector.get_columns('users')]
+        if 'username' not in columns and 'email' in columns:
+            try:
+                with db.engine.begin() as connection:
+                    connection.execute(text('ALTER TABLE users RENAME COLUMN email TO username;'))
+                print("Renamed 'email' column to 'username' in 'users' table.")
+            except Exception as e:
+                print(f"Error renaming column: {e}")
     db.create_all()
 
 if __name__ == "__main__":

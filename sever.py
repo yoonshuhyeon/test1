@@ -160,6 +160,15 @@ def update_class(current_user):
 
     return jsonify({'message': '반 정보가 성공적으로 업데이트되었습니다.'}), 200
 
+@app.route('/api/user_info', methods=['GET'])
+@token_required
+def user_info(current_user):
+    return jsonify({
+        'grade': current_user.grade,
+        'class_number': current_user.class_number,
+        'name': current_user.name
+    }), 200
+
 # =================================
 # QR CODE ROUTE
 # =================================

@@ -357,14 +357,6 @@ def logout():
 
 with app.app_context():
     db.create_all()
-    try:
-        with db.engine.begin() as connection:
-            inspector = db.inspect(db.engine)
-            if 'last_class_update' not in [col['name'] for col in inspector.get_columns('users')]:
-                connection.execute(text('ALTER TABLE users ADD COLUMN last_class_update TIMESTAMP;'))
-    except Exception as e:
-        # Column already exists, which is fine.
-        print(f"Could not add column: {e}")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

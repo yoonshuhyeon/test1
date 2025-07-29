@@ -24,12 +24,16 @@ CORS(app)
 # =================================
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-secret-key-for-dev')
 uri = os.environ.get('DATABASE_URL')
-if uri and uri.startswith("postgres://"):
+if not uri:
+    # 로컬 테스트용 SQLite 데이터베이스 설정
+    uri = f"sqlite:///{os.path.join(os.path.dirname(os.path.abspath(__file__)), 'local_database.db')}"
+elif uri.startswith("postgres://"):
     uri = uri.replace("postgres://", "postgresql://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# SQLAlchemy 엔진 옵션 설정
 engine_options = {}
 if uri and uri.startswith("postgresql"):
     engine_options['connect_args'] = {'sslmode': 'require'}

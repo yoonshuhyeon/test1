@@ -29,6 +29,8 @@ if not uri:
     uri = f"sqlite:///{os.path.join(os.path.dirname(os.path.abspath(__file__)), 'local_database.db')}"
 elif uri.startswith("postgres://"):
     uri = uri.replace("postgres://", "postgresql://", 1)
+    if "sslmode" not in uri:
+        uri += "?sslmode=require"
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)

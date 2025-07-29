@@ -29,13 +29,18 @@ if not uri:
     uri = f"sqlite:///{os.path.join(os.path.dirname(os.path.abspath(__file__)), 'local_database.db')}"
 elif uri.startswith("postgres://"):
     uri = uri.replace("postgres://", "postgresql://", 1)
-    if "sslmode" not in uri:
-        if "?" in uri:
-            uri += "&sslmode=require"
-        else:
-            uri += "?sslmode=require"
+
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Add engine options for SSL if using PostgreSQL
+if uri and uri.startswith("postgresql://"):
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'connect_args': {
+            'sslmode': 'require'
+        }
+    }
+
 db = SQLAlchemy(app)
 
 # =================================

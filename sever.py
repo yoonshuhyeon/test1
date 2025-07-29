@@ -30,7 +30,10 @@ if not uri:
 elif uri.startswith("postgres://"):
     uri = uri.replace("postgres://", "postgresql://", 1)
     if "sslmode" not in uri:
-        uri += "?sslmode=require"
+        if "?" in uri:
+            uri += "&sslmode=require"
+        else:
+            uri += "?sslmode=require"
 app.config['SQLALCHEMY_DATABASE_URI'] = uri
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)

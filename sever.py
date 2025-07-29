@@ -37,7 +37,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 if uri and uri.startswith("postgresql://"):
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'connect_args': {
-            'sslmode': 'require'
+            'sslmode': 'require',
+            'ssl': True
         }
     }
 

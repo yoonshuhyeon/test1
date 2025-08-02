@@ -37,6 +37,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 engine_options = {}
 if uri and uri.startswith("postgresql"):
     engine_options['connect_args'] = {'sslmode': 'require'}
+    engine_options['pool_pre_ping'] = True
 
 db = SQLAlchemy(app, engine_options=engine_options)
 
